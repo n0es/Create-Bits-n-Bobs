@@ -1,6 +1,7 @@
 package com.kipti.bnb.foundation;
 
 import com.kipti.bnb.content.cogwheel_chain.item.CogwheelChainPlacementEffect;
+import com.kipti.bnb.content.cogwheel_chain.item.CogwheelChainWrenchInteraction;
 import com.kipti.bnb.content.girder_strut.GirderStrutPlacementEffects;
 import com.kipti.bnb.content.weathered_girder.WeatheredGirderWrenchBehaviour;
 import net.createmod.catnip.data.Pair;
@@ -69,6 +70,7 @@ public class ClientEvents {
         final Minecraft mc = Minecraft.getInstance();
         if (mc.level != null && mc.player != null) {
             CogwheelChainPlacementEffect.tick(mc.player);
+            CogwheelChainWrenchInteraction.tick(mc.player);
         }
     }
 

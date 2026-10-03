@@ -118,6 +118,10 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
     maven { url = "https://maven.createmod.net" } // Create, Ponder, Flywheel
+    maven { // Greate and GTCEu, for the TerraFirmaMon Greate compat
+        url = "https://api.modrinth.com/maven"
+        content { includeGroup "maven.modrinth" }
+    }
     maven { url = "https://maven.ithundxr.dev/mirror" } // Registrate
     maven { url = "https://raw.githubusercontent.com/Fuzss/modresources/main/maven/" } // ForgeConfigAPIPort
     maven {
@@ -148,6 +152,11 @@ dependencies {
     compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:0.4.1"))
     implementation("io.github.llamalad7:mixinextras-forge:0.4.1")
     /* other minecraft dependencies are here */
+
+    // TerraFirmaMon: compile against Greate (and the GTCEu types its API exposes) so chain
+    // drives can keep a Greate cog's tier. Optional at runtime; see compat/greate.
+    compileOnly(fg.deobf("maven.modrinth:greate:0.0.79") { transitive = false })
+    compileOnly(fg.deobf("maven.modrinth:gregtechceu-modern:mc1.20.1-7.5.3") { transitive = false })
 
     // compile against the JEI API but do not include it at runtime
     compileOnly(fg.deobf("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}"))
@@ -309,39 +318,3 @@ def getRelevantChangelog(String version) {
     return log
 }
 
-publishMods {
-    file = jar.archiveFile
-    def changelogText = getRelevantChangelog(minecraft_version + "-" + mod_version)
-    changelog = changelogText
-    println("Using changelog:\n" + changelogText + "\n")
-    type = STABLE
-    modLoaders.add("forge")
-    displayName = mod_name + " " + mod_version + " Forge " + minecraft_version
-
-    curseforge {
-        projectId = "1398383"
-        projectSlug = "create-bits-n-bobs"
-        accessToken = env.fetch("CURSEFORGE_TOKEN")
-        minecraftVersions.add("1.20.1")
-        requires("create")
-    }
-    modrinth {
-        projectId = "T8bvmqVZ"
-        accessToken = env.fetch("MODRINTH_TOKEN")
-        minecraftVersions.add("1.20.1")
-        requires("create")
-    }
-
-    discord {
-        webhookUrl = env.fetch("DISCORD_WEBHOOK_URL")
-        username = "bits n bober version bot"
-        avatarUrl = "https://cataas.com/cat?width=500&height=500"
-        content = """
-        # New Mod Release: ${getDisplayName().get()}
-        ${changelogText}
-        """.trim()
-        style {
-            look = "CLASSIC"
-        }
-    }
-}

@@ -2,6 +2,7 @@ package com.kipti.bnb.network;
 
 import com.kipti.bnb.CreateBitsnBobs;
 import com.kipti.bnb.network.packets.from_client.PlaceCogwheelChainPacket;
+import com.kipti.bnb.network.packets.from_client.RemoveCogwheelChainPacket;
 import com.simibubi.create.foundation.networking.SimplePacketBase;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -20,11 +21,12 @@ import java.util.function.Supplier;
 public enum BnbPackets {
     // C2S
     PLACE_COGWHEEL_CHAIN(PlaceCogwheelChainPacket.class, PlaceCogwheelChainPacket::new, NetworkDirection.PLAY_TO_SERVER),
+    REMOVE_COGWHEEL_CHAIN(RemoveCogwheelChainPacket.class, RemoveCogwheelChainPacket::new, NetworkDirection.PLAY_TO_SERVER),
 
     // S2C
     ;
     public static final ResourceLocation CHANNEL_NAME = CreateBitsnBobs.asResource("main");
-    public static final int NETWORK_VERSION = 3;
+    public static final int NETWORK_VERSION = 4;
     public static final String NETWORK_VERSION_STR = String.valueOf(NETWORK_VERSION);
     private static SimpleChannel channel;
 

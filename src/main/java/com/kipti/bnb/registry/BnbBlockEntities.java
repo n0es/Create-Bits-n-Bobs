@@ -1,9 +1,11 @@
 package com.kipti.bnb.registry;
 
+import com.kipti.bnb.compat.greate.GreateCompat;
 import com.kipti.bnb.content.chain_pulley.ChainPulleyBlockEntity;
 import com.kipti.bnb.content.chain_pulley.ChainPulleyRenderer;
 import com.kipti.bnb.content.cogwheel_chain.block.CogwheelChainBlockEntity;
 import com.kipti.bnb.content.cogwheel_chain.block.CogwheelChainBlockEntityRenderer;
+import com.kipti.bnb.content.cogwheel_chain.block.CogwheelChainVisual;
 import com.kipti.bnb.content.flywheel_bearing.FlywheelBearingBlockEntity;
 import com.kipti.bnb.content.flywheel_bearing.FlywheelBearingBlockEntityRenderer;
 import com.kipti.bnb.content.girder_strut.GirderStrutBlockEntity;
@@ -18,6 +20,7 @@ import com.simibubi.create.content.kinetics.base.SingleAxisRotatingVisual;
 import com.tterrag.registrate.util.entry.BlockEntityEntry;
 import dev.engine_room.flywheel.api.model.Model;
 import dev.engine_room.flywheel.lib.model.Models;
+import dev.engine_room.flywheel.lib.model.baked.PartialModel;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 
@@ -48,17 +51,20 @@ public class BnbBlockEntities {
             .renderer(() -> GirderStrutBlockEntityRenderer::new)
             .register();
 
-    public static final BlockEntityEntry<CogwheelChainBlockEntity> COGWHEEL_CHAIN = REGISTRATE.blockEntity("cogwheel_chain", CogwheelChainBlockEntity::new)
+    public static final BlockEntityEntry<CogwheelChainBlockEntity> COGWHEEL_CHAIN = REGISTRATE.blockEntity("cogwheel_chain", CogwheelChainBlockEntity::create)
             .visual(() -> (context, blockEntity, partialTick) -> {
                 BlockState state = getBlockState(blockEntity);
-                Model model = Models.partial(
-                    BnbBlocks.SMALL_SPROCKET_COGWHEEL_CHAIN.has(state) ? BnbPartialModels.SMALL_SPROCKET_COGWHEEL_BLOCK :
-                        BnbBlocks.LARGE_SPROCKET_COGWHEEL_CHAIN.has(state) ? BnbPartialModels.LARGE_SPROCKET_COGWHEEL_BLOCK :
+                PartialModel sourceModel = GreateCompat.getCogwheelModel(blockEntity.getSourceBlock());
+                // Generic chain cogwheels look like the cogwheel they replaced; sprockets are the fallback
+                Model model = sourceModel != null ? Models.partial(sourceModel) : Models.partial(
+                    BnbBlocks.SMALL_SPROCKET_COGWHEEL_CHAIN.has(state) || BnbBlocks.SMALL_GENERIC_COGWHEEL_CHAIN.has(state) ? BnbPartialModels.SMALL_SPROCKET_COGWHEEL_BLOCK :
+                        BnbBlocks.LARGE_SPROCKET_COGWHEEL_CHAIN.has(state) || BnbBlocks.LARGE_GENERIC_COGWHEEL_CHAIN.has(state) ? BnbPartialModels.LARGE_SPROCKET_COGWHEEL_BLOCK :
                             BnbBlocks.SMALL_FLANGED_COGWHEEL_CHAIN.has(state) ? BnbPartialModels.SMALL_FLANGED_COGWHEEL_BLOCK : BnbPartialModels.LARGE_FLANGED_COGWHEEL_BLOCK
                 );
-                return new SingleAxisRotatingVisual<>(context, blockEntity, partialTick, model);
+                return new CogwheelChainVisual(context, blockEntity, partialTick, model);
             }, true)
-            .validBlocks(BnbBlocks.SMALL_SPROCKET_COGWHEEL_CHAIN, BnbBlocks.LARGE_SPROCKET_COGWHEEL_CHAIN, BnbBlocks.SMALL_FLANGED_COGWHEEL_CHAIN, BnbBlocks.LARGE_FLANGED_COGWHEEL_CHAIN)
+            .validBlocks(BnbBlocks.SMALL_SPROCKET_COGWHEEL_CHAIN, BnbBlocks.LARGE_SPROCKET_COGWHEEL_CHAIN, BnbBlocks.SMALL_FLANGED_COGWHEEL_CHAIN, BnbBlocks.LARGE_FLANGED_COGWHEEL_CHAIN,
+                BnbBlocks.SMALL_GENERIC_COGWHEEL_CHAIN, BnbBlocks.LARGE_GENERIC_COGWHEEL_CHAIN)
             .renderer(() -> CogwheelChainBlockEntityRenderer::new)
             .register();
 

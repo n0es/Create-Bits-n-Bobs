@@ -1,5 +1,6 @@
 package com.kipti.bnb.content.cogwheel_chain.block;
 
+import com.kipti.bnb.content.cogwheel_chain.graph.PlacingCogwheelChain;
 import com.kipti.bnb.registry.BnbBlockEntities;
 import com.kipti.bnb.registry.BnbBlocks;
 import com.simibubi.create.AllShapes;
@@ -35,6 +36,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 public class CogwheelChainBlock extends RotatedPillarKineticBlock
@@ -43,13 +45,15 @@ public class CogwheelChainBlock extends RotatedPillarKineticBlock
     private static final Lazy<Map<Block, CogwheelChainBlock>> DEFAULT_CHAIN_BLOCKS_BY_SOURCE = Lazy.of(() -> {
         Map<Block, CogwheelChainBlock> map = new java.util.HashMap<>();
         for (CogwheelChainBlock chainBlock : ALL_CHAIN_BLOCKS) {
+            if (chainBlock.sourceBlock == null)
+                continue; // Generic chain blocks take their source from the block entity
             BlockEntry<?> source = chainBlock.sourceBlock.get();
             map.put(source.get(), chainBlock);
         }
         return map;
     });
 
-    protected CogwheelChainBlock(final boolean large, final Properties properties, final Supplier<BlockEntry<?>> sourceBlock) {
+    protected CogwheelChainBlock(final boolean large, final Properties properties, @Nullable final Supplier<BlockEntry<?>> sourceBlock) {
         super(properties);
         this.isLarge = large;
         this.sourceBlock = sourceBlock;
@@ -58,11 +62,13 @@ public class CogwheelChainBlock extends RotatedPillarKineticBlock
 
     @Override
     public ItemStack getCloneItemStack(BlockState state, HitResult target, BlockGetter level, BlockPos pos, Player player) {
-        return sourceBlock.get().asStack();
+        return new ItemStack(getSourceBlockState(level, pos).getBlock());
     }
 
     public static @Nullable BlockState getChainState(final BlockState existingState, final boolean large, final Direction.Axis axis) {
-        final Block chainBlock = DEFAULT_CHAIN_BLOCKS_BY_SOURCE.get().get(existingState.getBlock());
+        Block chainBlock = DEFAULT_CHAIN_BLOCKS_BY_SOURCE.get().get(existingState.getBlock());
+        if (chainBlock == null && PlacingCogwheelChain.isGenericBlockTarget(existingState))
+            chainBlock = ICogWheel.isLargeCog(existingState) ? BnbBlocks.LARGE_GENERIC_COGWHEEL_CHAIN.get() : BnbBlocks.SMALL_GENERIC_COGWHEEL_CHAIN.get();
         if (chainBlock == null)
             return null;
         return chainBlock.defaultBlockState().setValue(AXIS, axis);
@@ -73,6 +79,7 @@ public class CogwheelChainBlock extends RotatedPillarKineticBlock
     }
 
     private final boolean isLarge;
+    @Nullable
     private final Supplier<BlockEntry<?>> sourceBlock;
 
     public static CogwheelChainBlock smallFlanged(final Properties properties) {
@@ -162,11 +169,18 @@ public class CogwheelChainBlock extends RotatedPillarKineticBlock
 
     @Override
     public ItemRequirement getRequiredItems(final BlockState state, @Nullable final BlockEntity be) {
-        return ItemRequirement.of(sourceBlock.get().getDefaultState(), be);
+        return ItemRequirement.of(getSourceBlockState(be), be);
     }
 
-    public BlockState getSourceBlockState() {
-        return sourceBlock.get().getDefaultState();
+    /**
+     * The cogwheel this chain cogwheel was made from, and reverts to when the chain is removed.
+     */
+    public BlockState getSourceBlockState(final BlockGetter level, final BlockPos pos) {
+        return getSourceBlockState(level.getBlockEntity(pos));
+    }
+
+    protected BlockState getSourceBlockState(@Nullable final BlockEntity be) {
+        return Objects.requireNonNull(sourceBlock, "generic chain cogwheels must override getSourceBlockState").get().getDefaultState();
     }
 
 }

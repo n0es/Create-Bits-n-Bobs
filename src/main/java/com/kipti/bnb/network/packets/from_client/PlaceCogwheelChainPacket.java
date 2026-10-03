@@ -6,7 +6,10 @@ import com.simibubi.create.foundation.networking.SimplePacketBase;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.Items;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import com.kipti.bnb.content.cogwheel_chain.item.CogwheelChainItems;
 import net.minecraftforge.network.NetworkEvent;
 import org.jetbrains.annotations.Nullable;
 
@@ -45,13 +48,31 @@ public class PlaceCogwheelChainPacket extends SimplePacketBase {
         if (!worldSpacePartialChain.checkMatchingNodesInLevel(player.level()))
             return;
 
+        // Attached blocks (pumps) are never replaced, so a real cogwheel has to hold the chain as its controller
+        if (!worldSpacePartialChain.hasHoldingNode(player.level()))
+            return;
+        // An attached block isn't replaced, so nothing else stops it joining a second chain
+        for (final PlacingCogwheelNode node : worldSpacePartialChain.getVisitedNodes()) {
+            if (PlacingCogwheelChain.isAttachedBlockTarget(player.level().getBlockState(node.pos()))
+                    && CogwheelChainAttachments.getController(player.level(), node.pos()) != null)
+                return;
+        }
+        worldSpacePartialChain.startAtHoldingNode(player.level());
+
         final int chainsRequired = worldSpacePartialChain.getChainsRequiredInLoop();
 
-        final boolean hasEnough = player.isCreative() || ChainConveyorBlockEntity.getChainsFromInventory(player, Items.CHAIN.getDefaultInstance(), chainsRequired, true);
+        final InteractionHand[] hands = InteractionHand.values();
+        final InteractionHand preferredHand = priorityChainTakeHand >= 0 && priorityChainTakeHand < hands.length ? hands[priorityChainTakeHand] : null;
+        final ItemStack heldChain = CogwheelChainItems.findHeldChain(player, preferredHand);
+        if (heldChain == null)
+            return;
+        // Captured before consumption, which may replace the held stack
+        final Item chainItem = heldChain.getItem();
+        final ItemStack chainType = new ItemStack(chainItem);
+
+        final boolean hasEnough = player.isCreative() || ChainConveyorBlockEntity.getChainsFromInventory(player, chainType, chainsRequired, true);
         if (!hasEnough)
             return;
-        if (!player.isCreative())
-            ChainConveyorBlockEntity.getChainsFromInventory(player, Items.CHAIN.getDefaultInstance(), chainsRequired, false);
 
         final List<PathedCogwheelNode> chainGeometry;
         try {
@@ -63,9 +84,12 @@ public class PlaceCogwheelChainPacket extends SimplePacketBase {
         if (chainGeometry == null)
             return;
 
+        if (!player.isCreative())
+            ChainConveyorBlockEntity.getChainsFromInventory(player, chainType, chainsRequired, false);
+
         final CogwheelChain chain = new CogwheelChain(chainGeometry);
 
-        chain.placeInLevel(player.level(), worldSpacePartialChain);
+        chain.placeInLevel(player.level(), worldSpacePartialChain, chainItem);
     }
 
     @Override

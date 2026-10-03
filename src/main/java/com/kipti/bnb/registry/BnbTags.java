@@ -19,7 +19,9 @@ public class BnbTags {
 
     public enum BnbItemTags {
 
-        CHAIRS;
+        CHAIRS,
+        /** Items that can be wrapped around cogwheels as a chain drive. */
+        COGWHEEL_CHAINS;
 
         public final TagKey<Item> tag;
 
@@ -49,7 +51,11 @@ public class BnbTags {
         HEAVY,
         SUPER_HEAVY,
 
-        CHAIRS;
+        CHAIRS,
+        /** Addon cogwheels (beyond Create's own) that a chain drive can be wrapped around. */
+        CHAIN_DRIVE_COGWHEELS,
+        /** Blocks with cogwheel teeth (e.g. pumps) that a chain drive can run past without replacing them. */
+        CHAIN_DRIVE_ATTACHMENTS;
 
         public final TagKey<Block> tag;
 

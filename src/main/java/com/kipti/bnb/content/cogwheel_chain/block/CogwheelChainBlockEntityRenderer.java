@@ -1,26 +1,39 @@
 package com.kipti.bnb.content.cogwheel_chain.block;
 
+import com.kipti.bnb.compat.greate.GreateCompat;
 import com.kipti.bnb.content.cogwheel_chain.graph.CogwheelChain;
 import com.kipti.bnb.content.cogwheel_chain.graph.RenderedChainPathNode;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.simibubi.create.content.kinetics.base.KineticBlockEntityRenderer;
 import com.simibubi.create.foundation.render.RenderTypes;
+import dev.engine_room.flywheel.api.visualization.VisualizationManager;
+import dev.engine_room.flywheel.lib.model.baked.PartialModel;
+import net.createmod.catnip.render.CachedBuffers;
+import net.createmod.catnip.render.SuperByteBuffer;
 import dev.engine_room.flywheel.lib.transform.PoseTransformStack;
 import dev.engine_room.flywheel.lib.transform.TransformStack;
 import net.createmod.catnip.animation.AnimationTickHolder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.registries.ForgeRegistries;
 import org.joml.*;
 
 import java.lang.Math;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 public class CogwheelChainBlockEntityRenderer extends KineticBlockEntityRenderer<CogwheelChainBlockEntity> {
@@ -29,13 +42,43 @@ public class CogwheelChainBlockEntityRenderer extends KineticBlockEntityRenderer
     public static final int MIP_DISTANCE = 48;
     public static final int SEAM_DIST = 16;
 
+    private static final Map<Item, ResourceLocation> CHAIN_TEXTURES = new ConcurrentHashMap<>();
+
     public CogwheelChainBlockEntityRenderer(final BlockEntityRendererProvider.Context context) {
         super(context);
+    }
+
+    /**
+     * Chain blocks keep their texture at {@code <namespace>:textures/block/<item path>.png} with vanilla's UV layout
+     * (true of vanilla and TFC's metal chains), so draw the loop in the metal it was built from.
+     */
+    public static ResourceLocation getChainTexture(final Item chainItem) {
+        return CHAIN_TEXTURES.computeIfAbsent(chainItem, item -> {
+            final ResourceLocation id = ForgeRegistries.ITEMS.getKey(item);
+            if (id == null || item == Items.CHAIN)
+                return CHAIN_LOCATION;
+            final ResourceLocation texture = ResourceLocation.fromNamespaceAndPath(id.getNamespace(), "textures/block/" + id.getPath() + ".png");
+            return Minecraft.getInstance().getResourceManager().getResource(texture).isPresent() ? texture : CHAIN_LOCATION;
+        });
+    }
+
+    @Override
+    protected SuperByteBuffer getRotatedModel(final CogwheelChainBlockEntity be, final BlockState state) {
+        final PartialModel sourceModel = GreateCompat.getCogwheelModel(be.getSourceBlock());
+        if (sourceModel != null)
+            return CachedBuffers.partialFacingVertical(sourceModel, state,
+                    Direction.fromAxisAndDirection(state.getValue(CogwheelChainBlock.AXIS), Direction.AxisDirection.POSITIVE));
+        return super.getRotatedModel(be, state);
     }
 
     @Override
     protected void renderSafe(final CogwheelChainBlockEntity be, final float partialTicks, final PoseStack ms, final MultiBufferSource buffer, final int light, final int overlay) {
         super.renderSafe(be, partialTicks, ms, buffer, light, overlay);
+
+        // Without Flywheel, also draw the casing of an encased source cogwheel (the visual does it otherwise)
+        final BlockState casingState = CogwheelChainVisual.getCasingState(be);
+        if (casingState != null && !VisualizationManager.supportsVisualization(be.getLevel()))
+            CachedBuffers.block(casingState).light(light).renderInto(ms, buffer.getBuffer(RenderType.cutoutMipped()));
 
         final Function<Vector3f, Integer> lighter = be.createGlobalLighter();
         final CogwheelChain chain = be.getChain();
@@ -114,8 +157,9 @@ public class CogwheelChainBlockEntityRenderer extends KineticBlockEntityRenderer
                 .getBlockEntityRenderDispatcher().camera.getPosition()
                 .closerThan(from.lerp(to, 0.5), SEAM_DIST);
 
+        final ResourceLocation texture = getChainTexture(be.getChainItem());
         if (close)
-            renderChainSlowerButWithoutGaps(ms, buffer, offset, textureSquish, preFrom, from, to, postTo, light1, light2);
+            renderChainSlowerButWithoutGaps(ms, buffer, texture, offset, textureSquish, preFrom, from, to, postTo, light1, light2);
         else {
             chain.rotateYDegrees((float) yaw);
             chain.rotateXDegrees(90 - (float) pitch);
@@ -123,13 +167,13 @@ public class CogwheelChainBlockEntityRenderer extends KineticBlockEntityRenderer
             final float overextend = 0.05f;
             chain.translate(0, 8 / 16f - overextend / 2f, 0);
             chain.uncenter();
-            renderChainFastButWithGaps(ms, buffer, offset - overextend / 2f, textureSquish, (float) from.distanceTo(to) + overextend, light1, light2, far);
+            renderChainFastButWithGaps(ms, buffer, texture, offset - overextend / 2f, textureSquish, (float) from.distanceTo(to) + overextend, light1, light2, far);
         }
 
         ms.popPose();
     }
 
-    private static void renderChainSlowerButWithoutGaps(final PoseStack ms, final MultiBufferSource buffer, final float offset, final float textureSquish, final Vec3 preFrom, final Vec3 from, final Vec3 to, final Vec3 postTo, final int light1, final int light2) {
+    private static void renderChainSlowerButWithoutGaps(final PoseStack ms, final MultiBufferSource buffer, final ResourceLocation texture, final float offset, final float textureSquish, final Vec3 preFrom, final Vec3 from, final Vec3 to, final Vec3 postTo, final int light1, final int light2) {
         final List<Vec3> endPoints = getEndPointsForChainJoint(from, to, postTo);
         final List<Vec3> fromPoint = getEndPointsForChainJoint(preFrom, from, to);
         final float length = (float) from.distanceTo(to);
@@ -139,7 +183,7 @@ public class CogwheelChainBlockEntityRenderer extends KineticBlockEntityRenderer
         final float maxU = 3 / 16f;
         ms.pushPose();
 
-        final VertexConsumer vc = buffer.getBuffer(RenderTypes.chain(CHAIN_LOCATION));
+        final VertexConsumer vc = buffer.getBuffer(RenderTypes.chain(texture));
         final Matrix4f matrix4f = ms.last().pose();
         Matrix3f normal = ms.last().normal();
         for (int i = 0; i < 4; i += 1) {
@@ -175,7 +219,7 @@ public class CogwheelChainBlockEntityRenderer extends KineticBlockEntityRenderer
         );
     }
 
-    private static void renderChainFastButWithGaps(final PoseStack ms, final MultiBufferSource buffer, final float offset, final float textureSquish, final float length, final int light1,
+    private static void renderChainFastButWithGaps(final PoseStack ms, final MultiBufferSource buffer, final ResourceLocation texture, final float offset, final float textureSquish, final float length, final int light1,
                                                    final int light2, final boolean far) {
         final float radius = far ? 1f / 16f : 1.5f / 16f;
         final float minV = far ? 0 : offset * textureSquish;
@@ -186,7 +230,7 @@ public class CogwheelChainBlockEntityRenderer extends KineticBlockEntityRenderer
         ms.pushPose();
         ms.translate(0.5D, 0.0D, 0.5D);
 
-        final VertexConsumer vc = buffer.getBuffer(RenderTypes.chain(CHAIN_LOCATION));
+        final VertexConsumer vc = buffer.getBuffer(RenderTypes.chain(texture));
         renderPart(ms, vc, length, 0.0F, radius, radius, 0.0F, -radius, 0.0F, 0.0F, -radius, minU, maxU, minV, maxV,
                 light1, light2, far);
 

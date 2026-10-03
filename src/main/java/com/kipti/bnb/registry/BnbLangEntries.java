@@ -12,6 +12,8 @@ public class BnbLangEntries {
 
         ChainInteractionFailedException.addTranslationLangs(CreateBitsnBobs.REGISTRATE,
                 "cannot_revisit_node", "You cannot self-intersect the chain!",
+                "needs_cogwheel", "A chain needs at least one cogwheel to hold it",
+                "already_chained", "That block is already part of another chain",
                 "out_of_bounds", "Cogwheel exceeds maximum bounds!",
                 "cogwheels_cannot_touch", "Cogwheels must not touch each other!",
                 "not_valid_axis_change", "Large cogwheels must share a tangent to change axis!",

@@ -5,6 +5,7 @@ import com.kipti.bnb.content.chain_pulley.ChainPulleyBlock;
 import com.kipti.bnb.content.chair.ChairBlock;
 import com.kipti.bnb.content.cogwheel_chain.block.CogwheelChainBlock;
 import com.kipti.bnb.content.cogwheel_chain.block.ConnectingCogwheelChainBlock;
+import com.kipti.bnb.content.cogwheel_chain.block.GenericCogwheelChainBlock;
 import com.kipti.bnb.content.cogwheel_chain.flanged_gear.EmptyFlangedGearBlock;
 import com.kipti.bnb.content.flywheel_bearing.FlywheelBearingBlock;
 import com.kipti.bnb.content.girder_strut.GirderStrutBlock;
@@ -55,6 +56,7 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.storage.loot.LootPool;
+import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.world.level.storage.loot.entries.LootItem;
 import net.minecraft.world.level.storage.loot.providers.number.ConstantValue;
 import net.minecraftforge.client.model.generators.ConfiguredModel;
@@ -292,6 +294,27 @@ public class BnbBlocks {
             .blockstate((c, p) ->
                     BlockStateGen.axisBlock(c, p, (s) -> p.models().getExistingFile(CreateBitsnBobs.asResource("block/sprocket/large_cogwheel"))))
             .loot((lt, block) -> lt.dropOther(block, AllBlocks.LARGE_COGWHEEL.get()))
+            .register();
+
+    // Chain cogwheels for addon cogwheels; drops come from the recorded source block, not a loot table
+    public static final BlockEntry<GenericCogwheelChainBlock> SMALL_GENERIC_COGWHEEL_CHAIN = REGISTRATE.block("small_generic_cogwheel_chain", GenericCogwheelChainBlock::small)
+            .initialProperties(SharedProperties::stone)
+            .properties(p -> p.sound(SoundType.METAL)
+                    .mapColor(MapColor.METAL))
+            .transform(axeOrPickaxe())
+            .blockstate((c, p) ->
+                    BlockStateGen.axisBlock(c, p, (s) -> p.models().getExistingFile(CreateBitsnBobs.asResource("block/sprocket/small_cogwheel"))))
+            .loot((lt, block) -> lt.add(block, LootTable.lootTable()))
+            .register();
+
+    public static final BlockEntry<GenericCogwheelChainBlock> LARGE_GENERIC_COGWHEEL_CHAIN = REGISTRATE.block("large_generic_cogwheel_chain", GenericCogwheelChainBlock::large)
+            .initialProperties(SharedProperties::stone)
+            .properties(p -> p.sound(SoundType.METAL)
+                    .mapColor(MapColor.METAL))
+            .transform(axeOrPickaxe())
+            .blockstate((c, p) ->
+                    BlockStateGen.axisBlock(c, p, (s) -> p.models().getExistingFile(CreateBitsnBobs.asResource("block/sprocket/large_cogwheel"))))
+            .loot((lt, block) -> lt.add(block, LootTable.lootTable()))
             .register();
 
     public static final BlockEntry<CogwheelChainBlock> SMALL_FLANGED_COGWHEEL_CHAIN = REGISTRATE.block("small_flanged_cogwheel_chain", CogwheelChainBlock::smallFlanged)

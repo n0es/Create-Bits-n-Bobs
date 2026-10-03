@@ -1,8 +1,12 @@
 package com.kipti.bnb.content.cogwheel_chain.item;
 
+import com.kipti.bnb.content.cogwheel_chain.graph.ChainInteractionFailedException;
+import com.kipti.bnb.content.cogwheel_chain.graph.CogwheelChainGeometryBuilder;
 import com.kipti.bnb.content.cogwheel_chain.graph.CogwheelChainPathfinder;
+import com.kipti.bnb.content.cogwheel_chain.graph.PathedCogwheelNode;
 import com.kipti.bnb.content.cogwheel_chain.graph.PlacingCogwheelChain;
 import com.kipti.bnb.content.cogwheel_chain.graph.PlacingCogwheelNode;
+import com.kipti.bnb.content.cogwheel_chain.graph.RenderedChainPathNode;
 import com.simibubi.create.content.equipment.blueprint.BlueprintOverlayRenderer;
 import com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorBlockEntity;
 import net.createmod.catnip.outliner.Outliner;
@@ -13,7 +17,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -21,6 +24,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.kipti.bnb.content.cogwheel_chain.item.CogwheelChainPlacementInteraction.currentBuildingChain;
@@ -44,8 +48,7 @@ public class CogwheelChainPlacementEffect {
         }
 
         //Get held chain
-        final ItemStack heldItem = isChain(player.getMainHandItem()) ? player.getMainHandItem() :
-                isChain(player.getOffhandItem()) ? player.getOffhandItem() : null;
+        final ItemStack heldItem = CogwheelChainItems.findHeldChain(player, null);
         if (heldItem != null) {
             final BlockPos targetedPos = getTargetedBlockAndDisplay();
 
@@ -54,14 +57,34 @@ public class CogwheelChainPlacementEffect {
                         Vec3.atLowerCornerOf(targetedPos.subtract(currentBuildingChain.getLastNode().pos())).length() : 0;
                 final int chainsRequired = currentBuildingChain.getChainsRequired(additionalDistance);
 
-                final boolean hasEnough = ChainConveyorBlockEntity.getChainsFromInventory(player, Items.CHAIN.getDefaultInstance(), chainsRequired, true);
-                BlueprintOverlayRenderer.displayChainRequirements(Items.CHAIN, chainsRequired, hasEnough);
+                final boolean hasEnough = ChainConveyorBlockEntity.getChainsFromInventory(player, heldItem, chainsRequired, true);
+                BlueprintOverlayRenderer.displayChainRequirements(heldItem.getItem(), chainsRequired, hasEnough);
             }
         }
     }
 
-    private static boolean isChain(final ItemStack offhandItem) {
-        return offhandItem.is(Items.CHAIN);
+    @Nullable
+    private static List<PlacingCogwheelNode> previewNodes = null;
+    @Nullable
+    private static List<RenderedChainPathNode> previewPath = null;
+
+    /**
+     * The path the chain would take around the cogwheels picked so far, closed back to the first one; recomputed only
+     * when the picked cogwheels change. Null if they can't form a loop yet.
+     */
+    private static @Nullable List<RenderedChainPathNode> getPreviewPath(final PlacingCogwheelChain chain) {
+        if (chain.getSize() < 2)
+            return null;
+        if (chain.getNodes().equals(previewNodes))
+            return previewPath;
+        previewNodes = List.copyOf(chain.getNodes());
+        try {
+            final List<PathedCogwheelNode> path = CogwheelChainPathfinder.buildChainPath(chain);
+            previewPath = path == null ? null : CogwheelChainGeometryBuilder.buildFullChainFromPathNodes(path);
+        } catch (final ChainInteractionFailedException e) {
+            previewPath = null;
+        }
+        return previewPath;
     }
 
     private static @Nullable BlockPos getTargetedBlockAndDisplay() {
@@ -97,26 +120,40 @@ public class CogwheelChainPlacementEffect {
             showBlockOutline(level, currentBuildingChain.getNodes().get(i).pos());
         }
 
-        for (int side = -1; side <= 1; side += 2) {
-            for (int i = 0; i < currentBuildingChain.getSize() - 1; i++) {
-                final PlacingCogwheelNode nodeA = currentBuildingChain.getNodes().get(i);
-                final PlacingCogwheelNode nodeB = currentBuildingChain.getNodes().get(i + 1);
-                if (CogwheelChainPathfinder.isValidPathStep(nodeA, side, nodeB, side)) {
-                    final Vec3 pathingTangentB = CogwheelChainPathfinder.getPathingTangentOnCog(nodeA, nodeB, side);
-                    final Vec3 pathingTangentA = CogwheelChainPathfinder.getPathingTangentOnCog(nodeB, nodeA, -side);
-                    Outliner.getInstance().showLine("cogwheel_chain_placement_pathing_" + nodeA.pos() + "_" + nodeB.pos() + "_side_" + side,
-                                    nodeA.center().add(pathingTangentA),
-                                    nodeB.center().add(pathingTangentB))
-                            .colored(0x95CD41)
-                            .lineWidth(1 / 16f);
-                } else if (CogwheelChainPathfinder.isValidPathStep(nodeA, side, nodeB, -side)) {
-                    final Vec3 pathingTangentB = CogwheelChainPathfinder.getPathingTangentOnCog(nodeA, nodeB, -side);
-                    final Vec3 pathingTangentA = CogwheelChainPathfinder.getPathingTangentOnCog(nodeB, nodeA, -side);
-                    Outliner.getInstance().showLine("cogwheel_chain_placement_pathing_" + nodeA.pos() + "_" + nodeB.pos() + "_side_" + side + "_switching",
-                                    nodeA.center().add(pathingTangentA),
-                                    nodeB.center().add(pathingTangentB))
-                            .colored(0x95CD41)
-                            .lineWidth(1 / 16f);
+        // Preview the chain exactly as it would be placed if the loop were closed now
+        final List<RenderedChainPathNode> path = getPreviewPath(currentBuildingChain);
+        if (path != null) {
+            final Vec3 origin = Vec3.atLowerCornerOf(currentBuildingChain.getFirstNode().pos());
+            for (int i = 0; i < path.size(); i++) {
+                Outliner.getInstance().showLine("cogwheel_chain_placement_preview_" + i,
+                                path.get(i).getPosition().add(origin),
+                                path.get((i + 1) % path.size()).getPosition().add(origin))
+                        .colored(0x95CD41)
+                        .lineWidth(1 / 16f);
+            }
+        } else {
+            // No valid loop through these cogwheels yet: show where the chain could run between each pair
+            for (int side = -1; side <= 1; side += 2) {
+                for (int i = 0; i < currentBuildingChain.getSize() - 1; i++) {
+                    final PlacingCogwheelNode nodeA = currentBuildingChain.getNodes().get(i);
+                    final PlacingCogwheelNode nodeB = currentBuildingChain.getNodes().get(i + 1);
+                    if (CogwheelChainPathfinder.isValidPathStep(nodeA, side, nodeB, side)) {
+                        final Vec3 pathingTangentB = CogwheelChainPathfinder.getPathingTangentOnCog(nodeA, nodeB, side);
+                        final Vec3 pathingTangentA = CogwheelChainPathfinder.getPathingTangentOnCog(nodeB, nodeA, -side);
+                        Outliner.getInstance().showLine("cogwheel_chain_placement_pathing_" + nodeA.pos() + "_" + nodeB.pos() + "_side_" + side,
+                                        nodeA.center().add(pathingTangentA),
+                                        nodeB.center().add(pathingTangentB))
+                                .colored(0x95CD41)
+                                .lineWidth(1 / 16f);
+                    } else if (CogwheelChainPathfinder.isValidPathStep(nodeA, side, nodeB, -side)) {
+                        final Vec3 pathingTangentB = CogwheelChainPathfinder.getPathingTangentOnCog(nodeA, nodeB, -side);
+                        final Vec3 pathingTangentA = CogwheelChainPathfinder.getPathingTangentOnCog(nodeB, nodeA, -side);
+                        Outliner.getInstance().showLine("cogwheel_chain_placement_pathing_" + nodeA.pos() + "_" + nodeB.pos() + "_side_" + side + "_switching",
+                                        nodeA.center().add(pathingTangentA),
+                                        nodeB.center().add(pathingTangentB))
+                                .colored(0x95CD41)
+                                .lineWidth(1 / 16f);
+                    }
                 }
             }
         }

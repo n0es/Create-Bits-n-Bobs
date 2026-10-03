@@ -1,20 +1,26 @@
 package com.kipti.bnb.content.cogwheel_chain.graph;
 
 import com.kipti.bnb.registry.BnbBlocks;
+import com.kipti.bnb.content.cogwheel_chain.block.CogwheelChainBlock;
 import com.kipti.bnb.registry.BnbConfigs;
+import com.kipti.bnb.registry.BnbTags;
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.content.kinetics.simpleRelays.CogWheelBlock;
+import com.simibubi.create.content.kinetics.base.IRotate;
+import com.simibubi.create.content.kinetics.simpleRelays.ICogWheel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -117,15 +123,66 @@ public class PlacingCogwheelChain {
 
     public static boolean isValidBlockTarget(final BlockState state) {
         return AllBlocks.COGWHEEL.has(state) ||  AllBlocks.LARGE_COGWHEEL.has(state) ||
-                BnbBlocks.SMALL_EMPTY_FLANGED_COGWHEEL.has(state) || BnbBlocks.LARGE_EMPTY_FLANGED_COGWHEEL.has(state);
+                BnbBlocks.SMALL_EMPTY_FLANGED_COGWHEEL.has(state) || BnbBlocks.LARGE_EMPTY_FLANGED_COGWHEEL.has(state) ||
+                isGenericBlockTarget(state) || isAttachedBlockTarget(state);
+    }
+
+    /**
+     * An addon cogwheel (tagged {@code bits_n_bobs:chain_drive_cogwheels}), bare or encased, that is chained via the
+     * generic chain cogwheel blocks, which remember the original block.
+     */
+    public static boolean isGenericBlockTarget(final BlockState state) {
+        return state.getBlock() instanceof ICogWheel
+                && state.hasProperty(CogWheelBlock.AXIS)
+                && !(state.getBlock() instanceof CogwheelChainBlock)
+                && !AllBlocks.COGWHEEL.has(state) && !AllBlocks.LARGE_COGWHEEL.has(state)
+                && BnbTags.BnbBlockTags.CHAIN_DRIVE_COGWHEELS.matches(state);
+    }
+
+    /**
+     * A block with cogwheel teeth that keeps working as itself, such as a mechanical pump (tagged
+     * {@code bits_n_bobs:chain_drive_attachments}). It is never replaced: the chain is held by the real cogwheels in the
+     * loop and drives it through {@link CogwheelChainAttachments}.
+     */
+    public static boolean isAttachedBlockTarget(final BlockState state) {
+        return state.getBlock() instanceof IRotate
+                && ICogWheel.isSmallCog(state)
+                && !(state.getBlock() instanceof CogwheelChainBlock)
+                && BnbTags.BnbBlockTags.CHAIN_DRIVE_ATTACHMENTS.matches(state);
+    }
+
+    public static Direction.Axis getAxis(final BlockState state) {
+        return ((IRotate) state.getBlock()).getRotationAxis(state);
     }
 
     public static boolean isLargeBlockTarget(final BlockState state) {
-        return AllBlocks.LARGE_COGWHEEL.has(state) || BnbBlocks.LARGE_EMPTY_FLANGED_COGWHEEL.has(state);
+        return AllBlocks.LARGE_COGWHEEL.has(state) || BnbBlocks.LARGE_EMPTY_FLANGED_COGWHEEL.has(state) ||
+                (isGenericBlockTarget(state) && ICogWheel.isLargeCog(state));
     }
 
     public static boolean hasSmallCogwheelOffset(final BlockState state) {
-        return AllBlocks.COGWHEEL.has(state);
+        return AllBlocks.COGWHEEL.has(state) || (isGenericBlockTarget(state) && ICogWheel.isSmallCog(state)) ||
+                isAttachedBlockTarget(state);
+    }
+
+    /**
+     * The loop has to be held by at least one real cogwheel, since attached blocks are never replaced.
+     */
+    public boolean hasHoldingNode(final BlockGetter level) {
+        return visitedNodes.stream().anyMatch(node -> !isAttachedBlockTarget(level.getBlockState(node.pos())));
+    }
+
+    /**
+     * The first node becomes the chain's controller, which must be a real cogwheel; the loop is cyclic, so start it
+     * at one.
+     */
+    public void startAtHoldingNode(final BlockGetter level) {
+        for (int i = 0; i < visitedNodes.size(); i++) {
+            if (!isAttachedBlockTarget(level.getBlockState(visitedNodes.get(i).pos()))) {
+                Collections.rotate(visitedNodes, -i);
+                return;
+            }
+        }
     }
 
 
@@ -142,7 +199,7 @@ public class PlacingCogwheelChain {
                 throw new ChainInteractionFailedException("cannot_revisit_node");
             }
         }
-        final Direction.Axis axis = newBlockState.getValue(CogWheelBlock.AXIS);
+        final Direction.Axis axis = getAxis(newBlockState);
         final boolean isLarge = isLargeBlockTarget(newBlockState);
         final boolean hasSmallCogwheelOffset = hasSmallCogwheelOffset(newBlockState);
 
@@ -314,7 +371,7 @@ public class PlacingCogwheelChain {
             if (!isValidBlockTarget(state)) {
                 return false;
             }
-            final Direction.Axis axis = state.getValue(CogWheelBlock.AXIS);
+            final Direction.Axis axis = getAxis(state);
             final boolean isLarge = isLargeBlockTarget(state);
             final boolean hasSmallCogwheelOffset = hasSmallCogwheelOffset(state);
             if (axis != node.rotationAxis() || isLarge != node.isLarge() || hasSmallCogwheelOffset != node.hasOffsetForSmallCogwheel()) {

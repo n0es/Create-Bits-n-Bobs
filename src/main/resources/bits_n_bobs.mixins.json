@@ -10,6 +10,7 @@
     "ContraptionColliderMixin",
     "DynamicComponentMixin",
     "RotationPropagatorMixin",
+    "RotationPropagatorChainMixin",
     "flywheel_bearing.KineticNetworkMixin",
     "presets.WorldDimensionsMixin",
     "presets.WorldPresetsBootstrapMixin",

@@ -1,7 +1,9 @@
 package com.kipti.bnb.content.cogwheel_chain.block;
 
 import com.kipti.bnb.content.cogwheel_chain.graph.CogwheelChain;
+import com.kipti.bnb.content.cogwheel_chain.graph.CogwheelChainAttachments;
 import com.kipti.bnb.content.cogwheel_chain.graph.PathedCogwheelNode;
+import com.kipti.bnb.compat.greate.GreateCompat;
 import com.kipti.bnb.content.girder_strut.IBlockEntityRelighter;
 import com.simibubi.create.api.schematic.requirement.SpecialBlockEntityItemRequirement;
 import com.simibubi.create.content.kinetics.base.IRotate;
@@ -11,7 +13,11 @@ import com.simibubi.create.content.schematics.requirement.ItemRequirement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Vec3i;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtUtils;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -20,12 +26,21 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.WeakHashMap;
 
 public class CogwheelChainBlockEntity extends SimpleKineticBlockEntity implements IBlockEntityRelighter, SpecialBlockEntityItemRequirement {
+
+    /** Chain cogwheels loaded on the client, so chains can be picked out of the air with a wrench. */
+    private static final Set<CogwheelChainBlockEntity> CLIENT_LOADED = Collections.newSetFromMap(new WeakHashMap<>());
 
     private boolean isController = false;
     @Nullable
@@ -33,10 +48,46 @@ public class CogwheelChainBlockEntity extends SimpleKineticBlockEntity implement
     @Nullable
     private Vec3i controllerOffset = null;
     private int chainsToRefund = 0;
+    /** Controller only: the chain item the loop was built from, refunded when it breaks. */
+    private Item chainItem = Items.CHAIN;
+    /** Generic chain cogwheels only: the cogwheel this replaced, with its axis (and casing shafts, if encased). */
+    @Nullable
+    private BlockState sourceState = null;
 
     public CogwheelChainBlockEntity(final BlockEntityType<?> type, final BlockPos pos, final BlockState state) {
         super(type, pos, state);
         setLazyTickRate(5);
+    }
+
+    public static CogwheelChainBlockEntity create(final BlockEntityType<?> type, final BlockPos pos, final BlockState state) {
+        return GreateCompat.isLoaded() ? GreateCompat.createChainBlockEntity(type, pos, state) : new CogwheelChainBlockEntity(type, pos, state);
+    }
+
+    public static Set<CogwheelChainBlockEntity> getClientLoaded() {
+        return CLIENT_LOADED;
+    }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (level != null && level.isClientSide)
+            CLIENT_LOADED.add(this);
+        if (level != null && isController && chain != null)
+            CogwheelChainAttachments.register(level, worldPosition, chain);
+    }
+
+    @Override
+    public void invalidate() {
+        super.invalidate();
+        CLIENT_LOADED.remove(this);
+        if (level != null && isController)
+            CogwheelChainAttachments.unregister(level, worldPosition);
+    }
+
+    @Override
+    public void onChunkUnloaded() {
+        super.onChunkUnloaded();
+        CLIENT_LOADED.remove(this);
     }
 
     @Override
@@ -60,6 +111,15 @@ public class CogwheelChainBlockEntity extends SimpleKineticBlockEntity implement
     @Override
     protected void read(final CompoundTag compound, final boolean clientPacket) {
         super.read(compound, clientPacket);
+        final BlockState previousSource = sourceState;
+        sourceState = compound.contains("SourceState")
+                ? NbtUtils.readBlockState(BuiltInRegistries.BLOCK.asLookup(), compound.getCompound("SourceState"))
+                : null;
+        if (sourceState != null && sourceState.isAir())
+            sourceState = null;
+        if (clientPacket && previousSource != sourceState)
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> CogwheelChainClientHooks.sourceChanged(this));
+
         isController = compound.getBoolean("IsController");
         if (compound.contains("ControllerOffsetX")) {
             controllerOffset = new Vec3i(
@@ -73,6 +133,10 @@ public class CogwheelChainBlockEntity extends SimpleKineticBlockEntity implement
 
         if (isController) {
             chainsToRefund = compound.getInt("ChainsToRefund");
+            final Item storedChain = compound.contains("ChainItem")
+                    ? ForgeRegistries.ITEMS.getValue(ResourceLocation.tryParse(compound.getString("ChainItem")))
+                    : null;
+            chainItem = storedChain == null || storedChain == Items.AIR ? Items.CHAIN : storedChain;
             if (chain != null && compound.contains("Chain")) {
                 chain.read(compound.getCompound("Chain"));
             } else {
@@ -98,6 +162,9 @@ public class CogwheelChainBlockEntity extends SimpleKineticBlockEntity implement
     private void writeConnectionInfo(final CompoundTag compound) {
         compound.putBoolean("IsController", isController);
 
+        if (sourceState != null)
+            compound.put("SourceState", NbtUtils.writeBlockState(sourceState));
+
         if (controllerOffset != null) {
             compound.putInt("ControllerOffsetX", controllerOffset.getX());
             compound.putInt("ControllerOffsetY", controllerOffset.getY());
@@ -109,6 +176,7 @@ public class CogwheelChainBlockEntity extends SimpleKineticBlockEntity implement
             chain.write(chainTag);
             compound.put("Chain", chainTag);
             compound.putInt("ChainsToRefund", chainsToRefund);
+            compound.putString("ChainItem", ForgeRegistries.ITEMS.getKey(chainItem).toString());
         }
     }
 
@@ -121,15 +189,17 @@ public class CogwheelChainBlockEntity extends SimpleKineticBlockEntity implement
     public ItemStack destroyChain(final boolean dropItemsInWorld) {
         //Try drop chains from the current block for convenience
         int chainsToReturn = chainsToRefund;
+        Item chainToReturn = chainItem;
         if (!isController && controllerOffset != null && level != null) {
             final BlockPos controllerPos = worldPosition.offset(controllerOffset);
             final BlockEntity be = level.getBlockEntity(controllerPos);
             if (be instanceof final CogwheelChainBlockEntity controllerBE) {
                 chainsToReturn = controllerBE.chainsToRefund;
+                chainToReturn = controllerBE.chainItem;
                 controllerBE.chainsToRefund = 0;
             }
         }
-        final ItemStack drops = Items.CHAIN.getDefaultInstance().copyWithCount(chainsToReturn);
+        final ItemStack drops = new ItemStack(chainToReturn, chainsToReturn);
         if (dropItemsInWorld) {
             Block.popResource(level, worldPosition, drops);
         }
@@ -157,6 +227,8 @@ public class CogwheelChainBlockEntity extends SimpleKineticBlockEntity implement
     public void setAsController(final CogwheelChain cogwheelChain) {
         this.isController = true;
         this.chain = cogwheelChain;
+        if (level != null)
+            CogwheelChainAttachments.register(level, worldPosition, cogwheelChain);
     }
 
     @Override
@@ -275,6 +347,26 @@ public class CogwheelChainBlockEntity extends SimpleKineticBlockEntity implement
         this.chainsToRefund = chainsUsed;
     }
 
+    public Item getChainItem() {
+        return chainItem;
+    }
+
+    public void setChainItem(final Item chainItem) {
+        this.chainItem = chainItem;
+    }
+
+    public @Nullable Block getSourceBlock() {
+        return sourceState == null ? null : sourceState.getBlock();
+    }
+
+    public @Nullable BlockState getSourceState() {
+        return sourceState;
+    }
+
+    public void setSourceState(@Nullable final BlockState sourceState) {
+        this.sourceState = sourceState;
+    }
+
     public void clearStoredChains() {
         if (isController) {
             this.chainsToRefund = 0;
@@ -293,7 +385,7 @@ public class CogwheelChainBlockEntity extends SimpleKineticBlockEntity implement
     public ItemRequirement getRequiredItems(final BlockState state) {
         return isController ? new ItemRequirement(
                 ItemRequirement.ItemUseType.CONSUME,
-                Blocks.CHAIN.asItem().getDefaultInstance().copyWithCount(chain != null ? chain.getChainsRequired() : 0)
+                new ItemStack(chainItem, chain != null ? chain.getChainsRequired() : 0)
         ) : ItemRequirement.NONE;
     }
 }
