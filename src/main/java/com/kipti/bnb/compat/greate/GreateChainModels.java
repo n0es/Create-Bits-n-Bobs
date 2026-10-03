@@ -13,6 +13,14 @@ final class GreateChainModels {
     private GreateChainModels() {
     }
 
+    static @Nullable PartialModel getShaftHalfModel(final Block encased) {
+        return encased instanceof TieredEncasedCogwheelBlock ? GreateModelUtils.getPartialModel(encased, "/shaft_half") : null;
+    }
+
+    static @Nullable Block getBareCogwheel(final Block encased) {
+        return encased instanceof final TieredEncasedCogwheelBlock tiered ? tiered.getCogWheel() : null;
+    }
+
     /**
      * Greate retextures Create's cogwheel models per material at runtime, under {@code greate:block/<material>/}.
      */

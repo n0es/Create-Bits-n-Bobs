@@ -62,7 +62,8 @@ public class CogwheelChainBlock extends RotatedPillarKineticBlock
 
     @Override
     public ItemStack getCloneItemStack(BlockState state, HitResult target, BlockGetter level, BlockPos pos, Player player) {
-        return new ItemStack(getSourceBlockState(level, pos).getBlock());
+        // Pick the source cogwheel the way it picks itself (an encased cogwheel gives its casing or cogwheel)
+        return getSourceBlockState(level, pos).getCloneItemStack(target, level, pos, player);
     }
 
     public static @Nullable BlockState getChainState(final BlockState existingState, final boolean large, final Direction.Axis axis) {

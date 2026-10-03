@@ -12,6 +12,10 @@ cogwheels, so the stock chain drive had nothing to attach to. Released as `0.0.4
 - **Addon cogwheels from a tag.** Cogwheels in `bits_n_bobs:chain_drive_cogwheels`, bare or encased, are
   swapped for generic chain cogwheels whose block entity records the original block state, so they
   render, collide, connect, drop and revert as the original.
+- **Encasing with the chain on.** A chained bare cogwheel takes its casing as usual; wrenching an axis
+  face of a chained encased cogwheel opens or closes that side, and sneak-wrenching takes the casing off
+  (sneak-wrench a bare one to remove the chain). Breaking one drops what the replaced block drops.
+- **Jade** names a chain cogwheel after the cogwheel it replaced (name, mod and icon).
 - **Attached blocks.** Blocks in `bits_n_bobs:chain_drive_attachments` (e.g. mechanical pumps) join a
   loop without being replaced, so they keep working; `RotationPropagatorChainMixin` links them in. A loop
   needs at least one real cogwheel.
@@ -26,6 +30,6 @@ Network protocol version is 4, so it won't connect to stock 0.0.41.
 
 ## Building
 
-`./gradlew build` with JDK 17. Greate and GTCEu come from the Modrinth maven as compile-only dependencies.
+`./gradlew build` with JDK 17. Greate, GTCEu and Jade come from the Modrinth maven as compile-only dependencies.
 
 Licensed MIT, like upstream (Cake, Kipti, NormalGuy, Astral, Spydnel).

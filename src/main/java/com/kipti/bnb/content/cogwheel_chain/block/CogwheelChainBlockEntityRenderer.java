@@ -6,6 +6,8 @@ import com.kipti.bnb.content.cogwheel_chain.graph.RenderedChainPathNode;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.simibubi.create.content.kinetics.base.KineticBlockEntityRenderer;
+import com.simibubi.create.content.kinetics.simpleRelays.BracketedKineticBlockEntityRenderer;
+import com.simibubi.create.content.kinetics.simpleRelays.encased.EncasedCogwheelBlock;
 import com.simibubi.create.foundation.render.RenderTypes;
 import dev.engine_room.flywheel.api.visualization.VisualizationManager;
 import dev.engine_room.flywheel.lib.model.baked.PartialModel;
@@ -77,8 +79,20 @@ public class CogwheelChainBlockEntityRenderer extends KineticBlockEntityRenderer
 
         // Without Flywheel, also draw the casing of an encased source cogwheel (the visual does it otherwise)
         final BlockState casingState = CogwheelChainVisual.getCasingState(be);
-        if (casingState != null && !VisualizationManager.supportsVisualization(be.getLevel()))
+        if (casingState != null && !VisualizationManager.supportsVisualization(be.getLevel())) {
             CachedBuffers.block(casingState).light(light).renderInto(ms, buffer.getBuffer(RenderType.cutoutMipped()));
+            // Shaft stubs on the open sides, as EncasedCogRenderer draws them
+            final Direction.Axis axis = getRotationAxisOf(be);
+            final float angle = ((EncasedCogwheelBlock) casingState.getBlock()).isLargeCog()
+                    ? BracketedKineticBlockEntityRenderer.getAngleForLargeCogShaft(be, axis)
+                    : getAngleForBe(be, be.getBlockPos(), axis);
+            final PartialModel shaftHalf = CogwheelChainVisual.getShaftHalfModel(casingState.getBlock());
+            for (final Direction d : CogwheelChainVisual.getOpenSides(be, casingState)) {
+                final SuperByteBuffer shaft = CachedBuffers.partialFacing(shaftHalf, be.getBlockState(), d);
+                kineticRotationTransform(shaft, be, axis, angle, light);
+                shaft.renderInto(ms, buffer.getBuffer(RenderType.solid()));
+            }
+        }
 
         final Function<Vector3f, Integer> lighter = be.createGlobalLighter();
         final CogwheelChain chain = be.getChain();

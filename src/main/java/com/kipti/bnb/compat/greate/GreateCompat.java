@@ -35,6 +35,20 @@ public final class GreateCompat {
     }
 
     /**
+     * The bare cogwheel a Greate encased cogwheel was made from, or null if it isn't one.
+     */
+    public static @Nullable Block getBareCogwheel(final Block encased) {
+        return isLoaded() ? GreateChainModels.getBareCogwheel(encased) : null;
+    }
+
+    /**
+     * Greate's per-material shaft stub for an encased cogwheel, or null if it isn't a Greate one.
+     */
+    public static @Nullable PartialModel getShaftHalfModel(@Nullable final Block encased) {
+        return isLoaded() && encased != null ? GreateChainModels.getShaftHalfModel(encased) : null;
+    }
+
+    /**
      * The model Greate renders for this cogwheel, or null if it isn't a Greate cogwheel.
      */
     public static @Nullable PartialModel getCogwheelModel(@Nullable final Block source) {

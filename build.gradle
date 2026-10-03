@@ -157,6 +157,8 @@ dependencies {
     // drives can keep a Greate cog's tier. Optional at runtime; see compat/greate.
     compileOnly(fg.deobf("maven.modrinth:greate:0.0.79") { transitive = false })
     compileOnly(fg.deobf("maven.modrinth:gregtechceu-modern:mc1.20.1-7.5.3") { transitive = false })
+    // Jade, so it names a chain cogwheel after the cogwheel it replaced
+    compileOnly(fg.deobf("maven.modrinth:jade:11.13.3+forge") { transitive = false })
 
     // compile against the JEI API but do not include it at runtime
     compileOnly(fg.deobf("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}"))
